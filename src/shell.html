@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="纯前端在线国际象棋：拖拽走子、完整规则（王车易位 / 吃过路兵 / 升变 / 将军 / 将死 / 和棋）、悔棋、翻转棋盘、走子记录与 PGN 导出，无需后端、离线可用。">
+<title>Online Chess · 在线国际象棋</title>
+<link rel="icon" href="__FAVICON__">
+<style>
+/*__STYLE__*/
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="logo" id="logo" aria-hidden="true"></div>
+  <div class="hero-text">
+    <h1>Online Chess</h1>
+    <p>双人对战 · 完整规则 · 打开即玩 · 离线可用</p>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- 左列：玩家卡片 + 棋盘 -->
+  <section class="board-col" aria-label="棋盘区域">
+    <div class="player-card" id="playerTop"></div>
+
+    <div class="board-frame">
+      <div class="board" id="board" role="grid" aria-label="国际象棋棋盘"></div>
+      <div class="banner-layer" id="bannerLayer" hidden>
+        <div class="banner">
+          <div class="banner-title" id="bannerTitle"></div>
+          <div class="banner-sub" id="bannerSub"></div>
+          <div class="btn-row">
+            <button class="btn primary" id="bannerNew">再来一局</button>
+            <button class="btn ghost" id="bannerClose">查看棋盘</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="player-card" id="playerBottom"></div>
+  </section>
+
+  <!-- 右列：状态 / 走子记录 / 控制 -->
+  <aside class="panel" aria-label="对局信息">
+    <div class="card status-card">
+      <h2>对局状态</h2>
+      <div class="stats">
+        <div class="stat"><span class="stat-label">当前回合</span><span class="stat-value" id="statTurn">—</span></div>
+        <div class="stat"><span class="stat-label">游戏状态</span><span class="stat-value" id="statState">—</span></div>
+        <div class="stat"><span class="stat-label">已走步数</span><span class="stat-value" id="statPlies">0</span></div>
+        <div class="stat"><span class="stat-label">最近一步</span><span class="stat-value" id="statLast">—</span></div>
+        <div class="stat wide"><span class="stat-label">对局模式</span><span class="stat-value" id="statMode">双人对战</span></div>
+      </div>
+    </div>
+
+    <div class="card moves-card">
+      <div class="card-head">
+        <h2>走子记录</h2>
+        <span class="chip" id="movesChip">0 步</span>
+      </div>
+      <div class="moves" id="moves" aria-live="polite"></div>
+    </div>
+
+    <div class="card controls-card">
+      <h2>游戏控制</h2>
+      <div class="btn-grid">
+        <button class="btn" id="btnUndo" title="撤销最近一步">悔棋</button>
+        <button class="btn" id="btnFlip" title="交换黑白视角">翻转棋盘</button>
+        <button class="btn" id="btnRestart" title="回到初始局面">重新开始</button>
+        <button class="btn" id="btnPgn" title="导出本局棋谱">导出 PGN</button>
+        <button class="btn primary" id="btnNew">新游戏</button>
+      </div>
+      <details class="advanced">
+        <summary>局面 FEN</summary>
+        <code id="fenText"></code>
+        <button class="btn tiny" id="btnCopyFen" type="button">复制 FEN</button>
+      </details>
+    </div>
+  </aside>
+</main>
+
+<footer class="foot">
+  规则引擎 <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a>（BSD-2-Clause）·
+  AI 引擎 <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener">Stockfish 19 Lite WASM</a>（GPLv3）·
+  棋子图形 cburnett（CC-BY-SA 3.0，via lichess）· 纯静态页面，无后端 · 按 Esc 取消升变
+</footer>
+
+<noscript><p style="text-align:center;color:#f87171">需要启用 JavaScript 才能对弈。</p></noscript>
+
+<!-- 升变选择 -->
+<div class="modal-backdrop" id="promoModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="兵升变">
+    <h3>兵升变</h3>
+    <p class="muted">选择升变后的棋子（按 Esc 取消）</p>
+    <div class="promo-grid" id="promoGrid"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="promoCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新游戏 -->
+<div class="modal-backdrop" id="newModal" hidden>
+  <div class="modal new-modal" role="dialog" aria-modal="true" aria-label="新游戏">
+    <h3>新游戏</h3>
+    <p class="muted">本地对战 · AI 引擎内嵌运行，无需联网</p>
+
+    <div class="field-label">对局模式</div>
+    <div class="seg" data-seg="mode">
+      <button class="seg-btn" data-value="pvp"><span class="seg-ico pair" data-icon="pair"></span>双人对战</button>
+      <button class="seg-btn" data-value="ai-w"><span class="seg-ico" data-icon="wK"></span>执白对 AI</button>
+      <button class="seg-btn" data-value="ai-b"><span class="seg-ico" data-icon="bK"></span>执黑对 AI</button>
+    </div>
+
+    <div class="field-label">AI 难度</div>
+    <div class="seg" data-seg="level" id="levelSeg"></div>
+
+    <div class="field-label">棋盘方向（仅双人模式）</div>
+    <div class="seg" data-seg="orientation">
+      <button class="seg-btn" data-value="w">白方在下</button>
+      <button class="seg-btn" data-value="b">黑方在下</button>
+      <button class="seg-btn" data-value="r">随机</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn ghost" id="newCancel">取消</button>
+      <button class="btn primary" id="newStart">开始对局</button>
+    </div>
+  </div>
+</div>
+
+<!-- PGN 导出 -->
+<div class="modal-backdrop" id="pgnModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="导出 PGN">
+    <h3>导出 PGN</h3>
+    <p class="muted">可复制或下载本局棋谱，用于复盘与分享</p>
+    <textarea id="pgnText" readonly spellcheck="false"></textarea>
+    <div class="btn-row">
+      <button class="btn" id="pgnCopy">复制</button>
+      <button class="btn" id="pgnDownload">下载 .pgn</button>
+      <button class="btn ghost" id="pgnClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/*__CHESS_JS__*/
+</script>
+<script>
+/*__PIECES__*/
+/*__ENGINE__*/
+/*__APP__*/
+</script>
+</body>
+</html>
