@@ -26,15 +26,21 @@
   <section class="board-col" aria-label="棋盘区域">
     <div class="player-card" id="playerTop"></div>
 
-    <div class="board-frame">
-      <div class="board" id="board" role="grid" aria-label="国际象棋棋盘"></div>
-      <div class="banner-layer" id="bannerLayer" hidden>
-        <div class="banner">
-          <div class="banner-title" id="bannerTitle"></div>
-          <div class="banner-sub" id="bannerSub"></div>
-          <div class="btn-row">
-            <button class="btn primary" id="bannerNew">再来一局</button>
-            <button class="btn ghost" id="bannerClose">查看棋盘</button>
+    <div class="board-row">
+      <div class="eval-bar" aria-hidden="true" title="白方胜率（白下黑上）">
+        <div class="eval-fill" id="evalFill"></div>
+        <div class="eval-mid"></div>
+      </div>
+      <div class="board-frame">
+        <div class="board" id="board" role="grid" aria-label="国际象棋棋盘"></div>
+        <div class="banner-layer" id="bannerLayer" hidden>
+          <div class="banner">
+            <div class="banner-title" id="bannerTitle"></div>
+            <div class="banner-sub" id="bannerSub"></div>
+            <div class="btn-row">
+              <button class="btn primary" id="bannerNew">再来一局</button>
+              <button class="btn ghost" id="bannerClose">查看棋盘</button>
+            </div>
           </div>
         </div>
       </div>
@@ -54,6 +60,15 @@
         <div class="stat"><span class="stat-label">最近一步</span><span class="stat-value" id="statLast">—</span></div>
         <div class="stat wide"><span class="stat-label">对局模式</span><span class="stat-value" id="statMode">双人对战</span></div>
       </div>
+    </div>
+
+    <div class="card eval-card">
+      <div class="card-head">
+        <h2>走法胜率</h2>
+        <span class="chip" id="evalMeta">待分析</span>
+      </div>
+      <div class="eval-legend"><span class="lg lg-w">白胜</span><span class="lg lg-d">和棋</span><span class="lg lg-b">黑胜</span></div>
+      <div class="eval-moves" id="evalMoves"><div class="moves-empty">分析引擎启动中…</div></div>
     </div>
 
     <div class="card moves-card">

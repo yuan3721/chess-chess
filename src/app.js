@@ -130,8 +130,9 @@
 
   /* ---------- Engine：Stockfish WASM 引擎封装 ----------
    * 引擎以 base64 内嵌于本文件（ENGINE_GLUE / ENGINE_WASM_B64，由构建脚本注入），
-   * 运行时还原为 Blob URL，再通过 URL hash 协议告诉 Worker 到哪里取 wasm——
-   * 因此双击 file:// 打开也能离线运行。
+   * Worker 脚本前缀内嵌 wasm 字节并接管 fetch —— 无论 glue 计算出什么加载地址，
+   * 都直接返回内嵌字节，因此双击 file:// 打开也能离线运行
+   * （不依赖 fetch(blob:)，该调用在部分浏览器的 file:// Worker 中不受支持）。
    * 通信协议为 UCI：uci/uciok、isready/readyok、position、go、bestmove、setoption。
    */
   class Engine {
@@ -143,6 +144,7 @@
       this._rejectInit = null;
       this._initTimer = null;
       this._pending = null;      // 等待 bestmove 的 resolve
+      this._pendingInfo = null;  // 分析模式下的 info 行回调
     }
 
     /** 首次使用时启动引擎（约 1~2 秒），失败时允许重试 */
@@ -151,10 +153,16 @@
       this.initPromise = new Promise((resolve, reject) => {
         let worker;
         try {
-          const bytes = Uint8Array.from(atob(ENGINE_WASM_B64), (c) => c.charCodeAt(0));
-          const wasmURL = URL.createObjectURL(new Blob([bytes], { type: 'application/wasm' }));
-          const glueURL = URL.createObjectURL(new Blob([ENGINE_GLUE], { type: 'text/javascript' }));
-          worker = new Worker(glueURL + '#' + encodeURIComponent(wasmURL));
+          // 引擎脚本前缀：把 wasm 字节内嵌进 Worker，并接管 Worker 内的 fetch
+          const prefix =
+            'var __B64=' + JSON.stringify(ENGINE_WASM_B64) + ';' +
+            'var __WASM_BYTES=null;' +
+            'self.fetch=function(){' +
+            'if(!__WASM_BYTES){__WASM_BYTES=Uint8Array.from(atob(__B64),function(c){return c.charCodeAt(0);});}' +
+            'return Promise.resolve(new Response(__WASM_BYTES,{headers:{"Content-Type":"application/wasm"}}));' +
+            '};\n';
+          const glueURL = URL.createObjectURL(new Blob([prefix + ENGINE_GLUE], { type: 'text/javascript' }));
+          worker = new Worker(glueURL);
         } catch (err) {
           reject(err);
           return;
@@ -188,12 +196,15 @@
           this._resolveInit = this._rejectInit = null;
           r();
         }
+      } else if (msg.startsWith('info ') && this._pendingInfo) {
+        this._pendingInfo(msg);
       } else if (msg.startsWith('bestmove')) {
         const r = this._pending;
         this._pending = null;
+        this._pendingInfo = null;
         if (r) r(this._parseBestmove(msg));
       }
-      // 其余 info depth … / id … 等行忽略
+      // 其余 id … 等行忽略
     }
 
     _send(cmd) { if (this.worker) this.worker.postMessage(cmd); }
@@ -226,10 +237,180 @@
       });
     }
 
+    /**
+     * 后台分析当前局面（MultiPV + WDL）。
+     * onInfo 逐行接收 info 行（实时更新胜率），bestmove 后 resolve。
+     */
+    async analyze(fen, { multiPV = 3, movetime = 500 } = {}, onInfo = () => {}) {
+      await this.init();
+      this._setOption('UCI_LimitStrength', 'false');
+      this._setOption('MultiPV', String(multiPV));
+      this._setOption('UCI_ShowWDL', 'true');
+      this._send(`position fen ${fen}`);
+      return new Promise((resolve, reject) => {
+        this._pendingInfo = onInfo;
+        this._pending = resolve;
+        this._send(`go movetime ${movetime}`);
+        setTimeout(() => {
+          if (this._pending === resolve) {
+            this._pending = null;
+            this._pendingInfo = null;
+            this._send('stop');
+            reject(new Error('分析超时'));
+          }
+        }, movetime + 8000);
+      });
+    }
+
     _parseBestmove(line) {
       const m = line.match(/^bestmove\s+([a-h][1-8])([a-h][1-8])([qrbn])?/);
       if (!m) return null;
       return { from: m[1], to: m[2], promotion: m[3] || undefined };
+    }
+  }
+
+  /** 解析 UCI info 行 → {depth, multipv, cp?, mate?, wdl?[W,D,L], pv:[uci…]} */
+  function parseInfoLine(line) {
+    if (!line.startsWith('info ')) return null;
+    const t = line.split(/\s+/);
+    const out = { pv: [] };
+    for (let i = 1; i < t.length; i++) {
+      const k = t[i];
+      if (k === 'depth') out.depth = Number(t[++i]);
+      else if (k === 'multipv') out.multipv = Number(t[++i]);
+      else if (k === 'score') {
+        const type = t[++i];
+        if (type === 'cp') out.cp = Number(t[++i]);
+        else if (type === 'mate') out.mate = Number(t[++i]);
+        const nx = t[i + 1];
+        if (nx === 'lowerbound' || nx === 'upperbound') i++;
+      } else if (k === 'wdl') {
+        out.wdl = [Number(t[++i]), Number(t[++i]), Number(t[++i])];
+      } else if (k === 'pv') {
+        out.pv = t.slice(i + 1);
+        break;
+      }
+    }
+    return out.pv.length ? out : null;
+  }
+
+  /* ---------- Analysis：局面分析（胜率条 + 走法胜率面板） ----------
+   * 使用独立的分析引擎实例（与对弈引擎互不干扰），每次局面变化后台
+   * 分析当前局面（MultiPV=3、UCI_ShowWDL），把每个候选走法的
+   * 胜/和/负 千分比换算成白方视角并驱动 UI。
+   */
+  class Analysis {
+    /** ui: { bar(share), meta(text), moves(records, st) } */
+    constructor(ui) {
+      this.ui = ui;
+      this.engine = null;
+      this.token = 0;
+      this.timer = null;
+      this.inflight = null;
+      this.lastFen = null;
+      this._records = {};
+      this._depth = 0;
+      this.scratch = new Chess();
+    }
+
+    /** 局面变化入口（App.refresh 调用）；fen 未变则跳过，终局直接定格 */
+    setPosition(fen, st) {
+      if (fen === this.lastFen) return;
+      this.lastFen = fen;
+      this.token++;
+      clearTimeout(this.timer);
+      if (!fen) return;
+      if (st && st.over) { this._terminal(st); return; }
+      const token = this.token;
+      this.timer = setTimeout(() => this._analyze(fen, token), 260);
+    }
+
+    _terminal(st) {
+      this.ui.bar(st.code === 'checkmate' ? (st.winner === 'w' ? 1 : 0) : 0.5);
+      this.ui.moves(null, st);
+      this.ui.meta('对局结束');
+    }
+
+    async _analyze(fen, token) {
+      if (token !== this.token) return;
+      if (!this.engine) {
+        this.engine = new Engine();
+        this.ui.meta('分析引擎启动中…');
+      }
+      try {
+        if (!this.engine.ready) await this.engine.init();
+      } catch (err) {
+        this.ui.meta('分析引擎不可用');
+        return;
+      }
+      if (token !== this.token) return;
+      if (this.inflight) {
+        this.engine.cancel();
+        try { await this.inflight; } catch (e) { /* 旧搜索被取消，忽略 */ }
+        if (token !== this.token) return;
+      }
+      this._records = {};
+      this._depth = 0;
+      const turn = fen.split(' ')[1];
+      this.inflight = this.engine.analyze(fen, { multiPV: 3, movetime: 500 }, (line) => {
+        if (token !== this.token) return;
+        this._consume(fen, turn, line);
+      });
+      try { await this.inflight; } catch (e) { /* 超时/取消 */ }
+      finally { this.inflight = null; }
+    }
+
+    _consume(fen, turn, line) {
+      const info = parseInfoLine(line);
+      if (!info) return;
+      const uci = info.pv[0];
+      if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(uci)) return;
+      const san = this._san(fen, uci);
+      if (!san) return;
+
+      // WDL / cp / mate 均为行棋方视角 → 统一换算成白方视角
+      let w, d, l, cpWhite = null;
+      if (info.wdl) {
+        [w, d, l] = turn === 'w' ? info.wdl : [info.wdl[2], info.wdl[1], info.wdl[0]];
+      } else if (info.cp !== undefined) {
+        cpWhite = turn === 'w' ? info.cp : -info.cp;
+      } else if (info.mate !== undefined) {
+        const whiteWins = (info.mate > 0) === (turn === 'w');
+        w = whiteWins ? 1000 : 0; d = 0; l = whiteWins ? 0 : 1000;
+      } else {
+        return;
+      }
+
+      this._records[info.multipv || 1] = { multipv: info.multipv || 1, san, w, d, l, cpWhite };
+      if (info.depth) this._depth = info.depth;
+      this._render(fen);
+    }
+
+    _san(fen, uci) {
+      if (!this.scratch.load(fen)) return null;
+      const m = this.scratch.move({
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci.length > 4 ? uci.slice(4) : undefined,
+      });
+      return m ? m.san : null;
+    }
+
+    _render(fen) {
+      const turn = fen.split(' ')[1];
+      const list = Object.keys(this._records).map(Number).sort((a, b) => a - b).map((k) => this._records[k]);
+      if (!list.length) return;
+      this.ui.moves(list, null);
+      this.ui.meta(`${turn === 'w' ? '白先' : '黑先'} · 深度 ${this._depth || '—'}`);
+      const top = this._records[1];
+      if (top) {
+        const share = top.w !== undefined
+          ? (top.w + top.d / 2) / 1000
+          : top.cpWhite !== null
+            ? 1 / (1 + Math.exp(-0.00368208 * top.cpWhite))
+            : 0.5;
+        this.ui.bar(share);
+      }
     }
   }
 
@@ -874,6 +1055,14 @@
       this.promotion = new PromotionDialog(this);
       this.newDialog = new NewGameDialog(this);
       this.banner = new Banner(this);
+      this.analysis = new Analysis({
+        bar: (share) => {
+          const h = Math.max(0, Math.min(1, share)) * 100;
+          $('#evalFill').style.height = h.toFixed(1) + '%';
+        },
+        meta: (text) => { $('#evalMeta').textContent = text; },
+        moves: (list, st) => this.renderEvalMoves(list, st),
+      });
 
       $('#logo').innerHTML = PIECE_SVG.bN;
       this._bindControls();
@@ -981,7 +1170,37 @@
       if (!this.st.over) this.banner.hide();
       else if (afterMove) setTimeout(() => { if (this.st.over) this.banner.show(this.st); }, 420);
 
+      this.analysis.setPosition(this.game.fen(), this.st);
       this.scheduleAI();
+    }
+
+    /* ----- 走法胜率面板渲染 ----- */
+    renderEvalMoves(list, st) {
+      const el = $('#evalMoves');
+      if (st) {
+        el.innerHTML = `<div class="moves-empty">${st.code === 'checkmate' ? `${colorName(st.winner)}获胜 · 将死` : '和棋'}</div>`;
+        return;
+      }
+      if (!list || !list.length) { el.innerHTML = '<div class="moves-empty">分析中…</div>'; return; }
+      el.innerHTML = list.map((r) => {
+        const best = r.multipv === 1 ? ' best' : '';
+        if (r.w !== undefined) {
+          const pw = Math.round(r.w / 10), pd = Math.round(r.d / 10), pb = Math.round(r.l / 10);
+          return `<div class="eval-row${best}">` +
+            `<span class="eval-san">${r.san}</span>` +
+            `<span class="eval-bars"><span class="w" style="width:${(r.w / 10).toFixed(1)}%"></span><span class="d" style="width:${(r.d / 10).toFixed(1)}%"></span><span class="b" style="width:${(r.l / 10).toFixed(1)}%"></span></span>` +
+            `<span class="eval-pct">${pw} · ${pd} · ${pb}</span>` +
+            `</div>`;
+        }
+        const cp = r.cpWhite;
+        const cpText = (cp >= 0 ? '+' : '') + (cp / 100).toFixed(1);
+        const share = (1 / (1 + Math.exp(-0.00368208 * cp))) * 100;
+        return `<div class="eval-row${best}">` +
+          `<span class="eval-san">${r.san}</span>` +
+          `<span class="eval-bars"><span class="w" style="width:${share.toFixed(1)}%"></span><span class="b" style="width:${(100 - share).toFixed(1)}%"></span></span>` +
+          `<span class="eval-pct">${cpText}</span>` +
+          `</div>`;
+      }).join('');
     }
 
     /* ----- AI 流程：轮到 AI 时自动思考并落子 ----- */

@@ -59,9 +59,31 @@ body {
 /* ---------------- 棋盘列 ---------------- */
 .board-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
-.board-frame { position: relative; width: 100%; max-width: 640px; margin: 0 auto; }
+.board-row {
+  display: flex; gap: 10px; align-items: stretch;
+  width: 100%; max-width: 656px; margin: 0 auto;
+}
+.board-frame { position: relative; flex: 1; min-width: 0; }
 @media (min-width: 921px) and (max-height: 920px) {
-  .board-frame { max-width: min(640px, calc(100vh - 250px)); }
+  .board-row { max-width: min(656px, calc(100vh - 250px)); }
+}
+
+/* ---------------- 胜率条（左） ---------------- */
+.eval-bar {
+  position: relative; flex: none;
+  width: 14px; border-radius: 8px; overflow: hidden;
+  background: #141924;                       /* 黑方占比（上方） */
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.eval-fill {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 50%;
+  background: linear-gradient(180deg, #f5f7fb, #d8dde7);
+  transition: height .5s cubic-bezier(.4, 0, .2, 1);
+}
+.eval-mid {
+  position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+  background: rgba(52, 211, 153, .6); z-index: 2;
 }
 
 .board {
@@ -263,6 +285,33 @@ body {
 .moves::-webkit-scrollbar { width: 8px; }
 .moves::-webkit-scrollbar-thumb { background: #2a3244; border-radius: 4px; }
 
+/* ---------------- 走法胜率面板 ---------------- */
+.eval-legend { display: flex; gap: 14px; margin-bottom: 10px; font-size: 11.5px; color: var(--muted); }
+.lg::before {
+  content: ""; display: inline-block; width: 8px; height: 8px;
+  border-radius: 2px; margin-right: 5px; vertical-align: -1px;
+}
+.lg-w::before { background: #eef1f7; }
+.lg-d::before { background: #7d879b; }
+.lg-b::before { background: #11151d; border: 1px solid #3a4356; }
+.eval-moves { display: flex; flex-direction: column; gap: 6px; }
+.eval-row {
+  display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center;
+  padding: 6px 8px; background: var(--card-2);
+  border: 1px solid var(--line); border-radius: 9px;
+}
+.eval-row.best { border-color: rgba(52, 211, 153, .45); }
+.eval-san {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700; font-size: 13.5px;
+}
+.eval-bars { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: #11151d; }
+.eval-bars span { display: block; height: 100%; }
+.eval-bars .w { background: #eef1f7; }
+.eval-bars .d { background: #7d879b; }
+.eval-bars .b { background: #11151d; }
+.eval-pct { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 /* ---------------- 按钮 ---------------- */
 .btn {
   appearance: none;
@@ -403,6 +452,8 @@ body {
   .stats { gap: 8px 10px; }
   .banner { padding: 20px 22px; }
   .banner-title { font-size: 20px; }
+  .eval-bar { width: 10px; }
+  .board-row { gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
