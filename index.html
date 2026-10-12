@@ -42,6 +42,8 @@ body {
   color: var(--text);
   min-height: 100vh;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;        /* 禁用双击缩放，保留滚动 / 双指缩放 */
+  overscroll-behavior-y: contain;    /* 防止拖拽时下拉刷新导致页面跳动 */
 }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -172,7 +174,7 @@ body {
   transition: transform .18s ease;
   will-change: transform;
 }
-.piece.grabbing { cursor: grabbing; }
+.piece.grabbing { cursor: grabbing; transition: none; }
 .piece.dragging { z-index: 30; transition: none; cursor: grabbing; }
 .piece.dragging .glyph { transform: scale(1.14); }
 .glyph {
@@ -255,7 +257,23 @@ body {
 @keyframes pulse { 50% { opacity: .35; } }
 
 /* ---------------- 右侧面板 ---------------- */
-.panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* 状态 + 控制 双列并排（紧凑） */
+.row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+.row-2col .card { padding: 11px 12px; }
+.row-2col .card h2 { font-size: 13px; margin-bottom: 8px; }
+.row-2col .stats { gap: 6px; }
+.row-2col .stat { padding: 6px 8px; border-radius: 8px; }
+.row-2col .stat-label { font-size: 10.5px; margin-bottom: 2px; }
+.row-2col .stat-value { font-size: 12.5px; min-height: 18px; gap: 4px; }
+.row-2col .stat-value svg { width: 15px; height: 15px; }
+.row-2col .btn-grid { gap: 6px; }
+.row-2col .btn { padding: 7px 2px; font-size: 12px; border-radius: 8px; }
+.row-2col .advanced { margin-top: 10px; }
+.row-2col .advanced summary { font-size: 11.5px; }
+.row-2col .advanced code { font-size: 10.5px; padding: 6px 8px; margin-top: 6px; }
+.row-2col .advanced .btn { margin-top: 6px; font-size: 11.5px; }
 .card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -265,6 +283,37 @@ body {
 .card h2 { margin: 0 0 12px; font-size: 15px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .card-head h2 { margin: 0; }
+
+/* 顶部「新游戏」按钮 */
+.btn-new-top {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+/* 走法胜率显示开关 */
+.eval-toggles { display: flex; gap: 16px; margin-bottom: 10px; }
+.switch {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12.5px; color: var(--muted);
+  cursor: pointer; user-select: none; -webkit-user-select: none;
+}
+.switch input { display: none; }
+.switch .sl {
+  width: 30px; height: 17px; border-radius: 999px; flex: none;
+  background: #2a3244; border: 1px solid var(--line);
+  position: relative; transition: background .15s, border-color .15s;
+}
+.switch .sl::after {
+  content: ""; position: absolute; top: 1px; left: 1px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: #8b96ad; transition: transform .15s, background .15s;
+}
+.switch input:checked + .sl { background: rgba(52, 211, 153, .3); border-color: rgba(52, 211, 153, .5); }
+.switch input:checked + .sl::after { transform: translateX(13px); background: var(--accent); }
+body.eval-off .eval-legend, body.eval-off .eval-moves { display: none; }
+body.bar-off .eval-bar { display: none; }
 .chip {
   font-size: 12px; color: var(--muted);
   background: var(--card-2); border: 1px solid var(--line);
@@ -291,7 +340,15 @@ body {
   font-size: 13.5px; padding: 3px 8px; border-radius: 6px; margin: 1px 2px 1px 0;
 }
 .ply:hover { background: var(--card-2); }
+.ply { cursor: pointer; user-select: none; }
 .ply.current { background: rgba(52, 211, 153, .14); color: var(--accent); font-weight: 700; }
+.ply.future { opacity: .38; }
+.chip-btn {
+  cursor: pointer; color: var(--accent);
+  border-color: rgba(52, 211, 153, .4);
+}
+.chip-btn:hover { background: rgba(52, 211, 153, .12); }
+.card-head .chip-btn { margin-left: 6px; }
 .moves::-webkit-scrollbar { width: 8px; }
 .moves::-webkit-scrollbar-thumb { background: #2a3244; border-radius: 4px; }
 
@@ -429,6 +486,97 @@ body {
   resize: vertical; min-height: 132px;
 }
 
+/* ---------------- PGN 导出标签页 / 导入弹窗 ---------------- */
+.pgn-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.pgn-tab {
+  font: inherit; font-size: 12.5px; color: var(--muted);
+  background: var(--card-2); border: 1px solid var(--line);
+  padding: 5px 12px; border-radius: 999px; cursor: pointer;
+}
+.pgn-tab:hover { color: var(--text); }
+.pgn-tab.active { color: var(--accent); border-color: rgba(52, 211, 153, .45); background: rgba(52, 211, 153, .12); }
+
+#importFile {
+  display: block; width: 100%; margin-bottom: 10px;
+  font-size: 12.5px; color: var(--muted);
+}
+#importText {
+  width: 100%; margin-bottom: 6px;
+  background: #0d1119; color: #cde9d8;
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  resize: vertical; min-height: 150px;
+}
+.import-error {
+  color: var(--danger); font-size: 12.5px;
+  background: rgba(248, 113, 113, .08);
+  border: 1px solid rgba(248, 113, 113, .3);
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 10px;
+}
+
+/* ---------------- 局面编辑器 ---------------- */
+.editor-card .edit-hint { margin: 0 0 10px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.edit-palette {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+  margin-bottom: 12px;
+}
+.pal {
+  aspect-ratio: 1; padding: 0;
+  background: var(--sq-light); border: 1px solid var(--line);
+  border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.pal svg { width: 78%; height: 78%; }
+.pal:hover { border-color: #3a4661; }
+.pal.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(52, 211, 153, .25); }
+.pal-eraser {
+  background: #2a1418; color: var(--danger);
+  font-size: 17px; font-weight: 700; line-height: 1;
+}
+.pal-eraser.on { border-color: var(--danger); box-shadow: 0 0 0 2px rgba(248, 113, 113, .25); }
+.edit-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.edit-row .seg { flex: none; }
+.edit-fen-row { margin-bottom: 14px; }
+#editFen {
+  flex: 1; min-width: 0;
+  background: #0d1119; color: #cde9d8;
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+#editFen:focus { outline: none; border-color: rgba(52, 211, 153, .5); }
+#editKings.bad { color: var(--danger); border-color: rgba(248, 113, 113, .4); }
+
+/* ---------------- 沉浸模式：只显示棋盘 ---------------- */
+.exit-immersive {
+  position: fixed; top: 12px; right: 12px; z-index: 60;
+  display: none;
+  background: rgba(16, 20, 30, .82);
+  backdrop-filter: blur(6px);
+}
+body.immersive .exit-immersive { display: inline-flex; }
+
+body.immersive .hero,
+body.immersive .panel,
+body.immersive .foot,
+body.immersive .player-card,
+body.immersive .eval-bar { display: none; }
+
+body.immersive .layout {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  max-width: none;
+  padding: 12px;
+}
+body.immersive .board-col { width: 100%; max-width: min(100%, calc(100vh - 24px)); gap: 0; }
+body.immersive .board-row { max-width: 100%; }
+body.immersive .board { border-radius: 12px; }
+
 /* ---------------- Toast ---------------- */
 .toast {
   position: fixed; left: 50%; bottom: 28px;
@@ -478,7 +626,7 @@ body {
   <div class="logo" id="logo" aria-hidden="true"></div>
   <div class="hero-text">
     <h1>Online Chess</h1>
-    <p>双人对战 · 完整规则 · 打开即玩 · 离线可用</p>
+    <p>执白对 AI · 双人对战 · 完整规则 · 离线可用</p>
   </div>
 </header>
 
@@ -512,14 +660,62 @@ body {
 
   <!-- 右列：状态 / 走子记录 / 控制 -->
   <aside class="panel" aria-label="对局信息">
-    <div class="card status-card">
-      <h2>对局状态</h2>
-      <div class="stats">
-        <div class="stat"><span class="stat-label">当前回合</span><span class="stat-value" id="statTurn">—</span></div>
-        <div class="stat"><span class="stat-label">游戏状态</span><span class="stat-value" id="statState">—</span></div>
-        <div class="stat"><span class="stat-label">已走步数</span><span class="stat-value" id="statPlies">0</span></div>
-        <div class="stat"><span class="stat-label">最近一步</span><span class="stat-value" id="statLast">—</span></div>
-        <div class="stat wide"><span class="stat-label">对局模式</span><span class="stat-value" id="statMode">双人对战</span></div>
+    <button class="btn primary btn-new-top" id="btnNew" title="选择模式 / 难度，开一局新游戏">＋ 新游戏</button>
+
+    <div class="row-2col">
+      <div class="card status-card">
+        <h2>对局状态</h2>
+        <div class="stats">
+          <div class="stat"><span class="stat-label">当前回合</span><span class="stat-value" id="statTurn">—</span></div>
+          <div class="stat"><span class="stat-label">游戏状态</span><span class="stat-value" id="statState">—</span></div>
+          <div class="stat"><span class="stat-label">已走步数</span><span class="stat-value" id="statPlies">0</span></div>
+          <div class="stat"><span class="stat-label">最近一步</span><span class="stat-value" id="statLast">—</span></div>
+          <div class="stat wide"><span class="stat-label">对局模式</span><span class="stat-value" id="statMode">双人对战</span></div>
+        </div>
+      </div>
+
+      <div class="card controls-card">
+        <h2>游戏控制</h2>
+        <div class="btn-grid">
+          <button class="btn" id="btnUndo" title="撤销最近一步">悔棋</button>
+          <button class="btn" id="btnFlip" title="交换黑白视角">翻转棋盘</button>
+          <button class="btn" id="btnRestart" title="回到初始局面">重新开始</button>
+          <button class="btn" id="btnPgn" title="导出本局棋谱">导出 PGN</button>
+          <button class="btn" id="btnImportPgn" title="导入 PGN 棋谱，回看并试走新变化">导入 PGN</button>
+          <button class="btn" id="btnEdit" title="编辑局面：自由摆放棋子 / 清空棋盘 / 导入 FEN">编辑局面</button>
+          <button class="btn" id="btnImmersive" title="只显示棋盘的专注模式（Esc 退出）">沉浸模式</button>
+        </div>
+        <details class="advanced">
+          <summary>局面 FEN</summary>
+          <code id="fenText"></code>
+          <button class="btn tiny" id="btnCopyFen" type="button">复制 FEN</button>
+        </details>
+      </div>
+    </div>
+
+    <div class="card editor-card" id="editorCard" hidden>
+      <div class="card-head">
+        <h2>编辑局面</h2>
+        <span class="chip" id="editKings">—</span>
+      </div>
+      <p class="edit-hint">左侧棋子栏点击拾取 → 点击棋盘放置；拖拽移动；右键 / 拖出棋盘 / ✕ 工具删除</p>
+      <div class="edit-palette" id="editPalette"></div>
+      <div class="edit-row">
+        <div class="seg" data-seg="edit-turn">
+          <button class="seg-btn" data-value="w" type="button">白先</button>
+          <button class="seg-btn" data-value="b" type="button">黑先</button>
+        </div>
+        <button class="btn tiny" id="editClear" type="button" title="移除所有棋子">清空棋盘</button>
+        <button class="btn tiny" id="editStandard" type="button" title="恢复标准开局摆放">标准开局</button>
+        <button class="btn tiny" id="editCurrent" type="button" title="回到进入编辑前的局面">当前局面</button>
+      </div>
+      <div class="edit-row edit-fen-row">
+        <input id="editFen" spellcheck="false" placeholder="粘贴 FEN 导入…">
+        <button class="btn tiny" id="editApplyFen" type="button">应用</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="editDone" type="button">完成编辑</button>
+        <button class="btn ghost" id="editCancel" type="button">取消编辑</button>
       </div>
     </div>
 
@@ -527,6 +723,14 @@ body {
       <div class="card-head">
         <h2>走法胜率</h2>
         <span class="chip" id="evalMeta">待分析</span>
+      </div>
+      <div class="eval-toggles">
+        <label class="switch" title="显示 / 隐藏右侧走法胜率列表">
+          <input type="checkbox" id="tglMoves" checked><span class="sl"></span>走法列表
+        </label>
+        <label class="switch" title="显示 / 隐藏棋盘左侧胜率条">
+          <input type="checkbox" id="tglBar"><span class="sl"></span>左侧胜率条
+        </label>
       </div>
       <div class="eval-legend"><span class="lg lg-w">白胜</span><span class="lg lg-d">和棋</span><span class="lg lg-b">黑胜</span></div>
       <div class="eval-moves" id="evalMoves"><div class="moves-empty">分析引擎启动中…</div></div>
@@ -536,24 +740,9 @@ body {
       <div class="card-head">
         <h2>走子记录</h2>
         <span class="chip" id="movesChip">0 步</span>
+        <button class="chip chip-btn" id="btnLatest" hidden title="回到最新局面">▸ 回到当前</button>
       </div>
       <div class="moves" id="moves" aria-live="polite"></div>
-    </div>
-
-    <div class="card controls-card">
-      <h2>游戏控制</h2>
-      <div class="btn-grid">
-        <button class="btn" id="btnUndo" title="撤销最近一步">悔棋</button>
-        <button class="btn" id="btnFlip" title="交换黑白视角">翻转棋盘</button>
-        <button class="btn" id="btnRestart" title="回到初始局面">重新开始</button>
-        <button class="btn" id="btnPgn" title="导出本局棋谱">导出 PGN</button>
-        <button class="btn primary" id="btnNew">新游戏</button>
-      </div>
-      <details class="advanced">
-        <summary>局面 FEN</summary>
-        <code id="fenText"></code>
-        <button class="btn tiny" id="btnCopyFen" type="button">复制 FEN</button>
-      </details>
     </div>
   </aside>
 </main>
@@ -612,7 +801,11 @@ body {
 <div class="modal-backdrop" id="pgnModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-label="导出 PGN">
     <h3>导出 PGN</h3>
-    <p class="muted">可复制或下载本局棋谱，用于复盘与分享</p>
+    <p class="muted">可复制或下载棋谱，用于复盘与分享</p>
+    <div class="pgn-tabs" id="pgnTabs" hidden>
+      <button class="pgn-tab active" id="pgnTabNew" type="button">本局（含新走法）</button>
+      <button class="pgn-tab" id="pgnTabOrig" type="button">原导入棋谱</button>
+    </div>
     <textarea id="pgnText" readonly spellcheck="false"></textarea>
     <div class="btn-row">
       <button class="btn" id="pgnCopy">复制</button>
@@ -622,7 +815,26 @@ body {
   </div>
 </div>
 
+<!-- PGN 导入 -->
+<div class="modal-backdrop" id="importModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="导入 PGN">
+    <h3>导入 PGN 棋谱</h3>
+    <p class="muted">粘贴 PGN 文本或选择 .pgn 文件。导入后可点击走子记录回看任意局面，也可在任意位置走出新变化；原始棋谱保持不变，可随时原样导出。</p>
+    <input type="file" id="importFile" accept=".pgn,text/plain">
+    <textarea id="importText" spellcheck="false" rows="9"
+      placeholder='[Event "休闲对局"]&#10;[White "白方"]&#10;[Black "黑方"]&#10;&#10;1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 ...'></textarea>
+    <div class="import-error" id="importError" hidden></div>
+    <div class="btn-row">
+      <button class="btn primary" id="importConfirm">导入</button>
+      <button class="btn ghost" id="importCancel">取消</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status"></div>
+
+<!-- 沉浸模式退出按钮 -->
+<button class="btn ghost exit-immersive" id="exitImmersive" type="button" title="退出沉浸模式（Esc）">✕ 退出沉浸</button>
 
 <script>
 /* chess.js 0.13.4 — Copyright (c) 2022 Jeff Hlywa (BSD-2-Clause) — https://github.com/jhlywa/chess.js */
@@ -2690,7 +2902,7 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
   class Game {
     constructor() { this.reset(); }
 
-    reset() { this.chess = new Chess(); }
+    reset() { this.chess = new Chess(); this.baseFen = null; }
 
     turn() { return this.chess.turn(); }
     fen() { return this.chess.fen(); }
@@ -2721,7 +2933,11 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
 
     pgnBody() { return this.chess.pgn({ max_width: 80, newline_char: '\n' }); }
 
-    loadFen(fen) { return this.chess.load(fen); }
+    loadFen(fen) {
+      const ok = this.chess.load(fen);
+      if (ok) this.baseFen = fen;      // 回放基点 = 载入的局面
+      return ok;
+    }
 
     /** 指定颜色王的所在格 */
     kingSquare(color) {
@@ -2735,10 +2951,55 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       return null;
     }
 
+    /** PGN 棋谱导入（宽容模式）；失败返回 false */
+    loadPgn(text) {
+      let ok = false;
+      try { ok = !!this.chess.load_pgn(text, { sloppy: true }); } catch { ok = false; }
+      if (!ok) return false;
+      // 带 SetUp/FEN 头的棋谱：回放基点为该 FEN，而非标准初始局面
+      const h = this.chess.header();
+      this.baseFen = (h && h.SetUp === '1' && typeof h.FEN === 'string') ? h.FEN : null;
+      return true;
+    }
+
+    /** 读取 PGN 头信息（White / Black / Event …） */
+    header(name) {
+      try {
+        const h = this.chess.header();
+        return (h && typeof h[name] === 'string') ? h[name] : '';
+      } catch { return ''; }
+    }
+
+    setHeader(name, value) { this.chess.header(name, value); }
+
+    /** 截断棋局：丢弃第 ply 步之后的所有走法（用于回看分叉） */
+    truncateTo(ply) {
+      const n = this.chess.history().length;
+      for (let i = ply; i < n; i++) this.chess.undo();
+    }
+
+    /** 回放得到第 ply 步（0..n）之后的只读局面；ply === n 时即当前局面 */
+    boardAt(ply) {
+      const hist = this.history();
+      const k = Math.max(0, Math.min(ply, hist.length));
+      if (k === hist.length) return this.chess;
+      const c = this.baseFen ? new Chess(this.baseFen) : new Chess();
+      for (let i = 0; i < k; i++) {
+        const h = hist[i];
+        c.move({ from: h.from, to: h.to, promotion: h.promotion || undefined });
+      }
+      return c;
+    }
+
+    /** 当前局面 → { square: 'wK' … } 棋子映射（编辑器用） */
+    mapPieces() { return mapFromBoard(this.chess); }
+
     /** 综合局面状态（有序判定：将死 > 逼和 > 子力不足 > 三次重复 > 五十步 > 将军） */
-    status() {
-      const c = this.chess;
-      if (c.in_checkmate()) {
+    status() { return computeStatus(this.chess); }
+  }
+
+  /** 对任意 chess.js 实例计算局面状态（回看历史局面时复用） */
+  function computeStatus(c) {    if (c.in_checkmate()) {
         const winner = other(c.turn());
         return {
           code: 'checkmate', over: true, winner,
@@ -2768,7 +3029,51 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
         return { code: 'check', over: false, text: '将军！', bannerTitle: '', bannerSub: '', result: '*' };
       }
       return { code: 'normal', over: false, text: '进行中', bannerTitle: '', bannerSub: '', result: '*' };
+  }
+
+  /* ---------- 局面编辑器工具 ---------- */
+  /** chess.js 实例 → { square: 'wK' } 棋子映射 */
+  function mapFromBoard(c) {
+    const map = {};
+    const b = c.board();
+    for (let ri = 0; ri < 8; ri++) {
+      for (let fi = 0; fi < 8; fi++) {
+        const p = b[ri][fi];
+        if (p) map[sqAt(fi, 7 - ri)] = p.color + p.type.toUpperCase();
+      }
     }
+    return map;
+  }
+
+  /** 棋子映射 + 行棋方 → FEN（易位权按王车位置自动推导，过路兵清空） */
+  function fenFromMap(map, turn) {
+    const rows = [];
+    for (let r = 7; r >= 0; r--) {
+      let row = '', empty = 0;
+      for (let f = 0; f < 8; f++) {
+        const code = map[sqAt(f, r)];
+        if (!code) { empty++; continue; }
+        if (empty) { row += String(empty); empty = 0; }
+        row += code[0] === 'w' ? code[1] : code[1].toLowerCase();
+      }
+      if (empty) row += String(empty);
+      rows.push(row);
+    }
+    let cast = '';
+    if (map.e1 === 'wK') { if (map.h1 === 'wR') cast += 'K'; if (map.a1 === 'wR') cast += 'Q'; }
+    if (map.e8 === 'bK') { if (map.h8 === 'bR') cast += 'k'; if (map.a8 === 'bR') cast += 'q'; }
+    return `${rows.join('/')} ${turn} ${cast || '-'} - 0 1`;
+  }
+
+  /** 宽容解析 FEN：允许省略后半字段，补全为标准默认值 */
+  function normalizeFen(text) {
+    const parts = String(text).trim().split(/\s+/);
+    if (parts.length < 1 || !parts[0].includes('/')) return null;
+    const full = [parts[0], parts[1] === 'w' || parts[1] === 'b' ? parts[1] : 'w',
+      parts[2] || '-', parts[3] || '-', parts[4] || '0', parts[5] || '1'];
+    const fen = full.join(' ');
+    const c = new Chess();
+    try { return c.load(fen) ? fen : null; } catch { return null; }
   }
 
   /* ---------- Engine：Stockfish WASM 引擎封装 ----------
@@ -3079,6 +3384,7 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       this.lastMove = null;
       this.checkSquare = null;
       this.drag = null;
+      this.editMode = false;         // 局面编辑模式（自由摆子）
 
       this.root.innerHTML = '';
       this.squaresEl = document.createElement('div');
@@ -3301,13 +3607,26 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       this.updateMarks();
     }
 
+    /* ----- 局面编辑模式 ----- */
+    setEditMode(on) {
+      this.editMode = !!on;
+      this.clearSelection();
+    }
+
     /* ----- 指针交互：拖拽 + 点击 ----- */
     _bind() {
       this.root.addEventListener('pointerdown', (e) => this._down(e));
       this.root.addEventListener('pointermove', (e) => this._move(e));
       this.root.addEventListener('pointerup', (e) => this._up(e));
       this.root.addEventListener('pointercancel', (e) => this._cancel(e));
-      this.root.addEventListener('contextmenu', (e) => e.preventDefault());
+      this.root.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        // 编辑模式：右键删除棋子
+        if (this.editMode) {
+          const sq = this.squareFromPoint(e.clientX, e.clientY);
+          if (sq && this.hooks.pieceAt(sq)) this.hooks.onEditErase(sq);
+        }
+      });
     }
 
     /** 屏幕坐标 → 格子（超出棋盘返回 null） */
@@ -3323,6 +3642,7 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
 
     _down(e) {
       if (this.drag || e.button !== 0) return;
+      if (this.editMode) return this._editDown(e);
       if (!this.hooks.interactive()) return;
       const sq = this.squareFromPoint(e.clientX, e.clientY);
       if (!sq) return;
@@ -3333,9 +3653,7 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
         const el = this.pieces.get(sq);
         const wasSelected = this.selected === sq;
         this.select(sq);
-        this.drag = { from: sq, el, x0: e.clientX, y0: e.clientY, moved: false, wasSelected, id: e.pointerId, hoverSq: null };
-        try { el.setPointerCapture(e.pointerId); } catch { /* 忽略 */ }
-        el.classList.add('grabbing');
+        this.drag = this._startDrag(el, sq, e, { wasSelected });
         e.preventDefault();
       } else if (this.selected) {
         // 点击-点击模式：目标是空格或对方棋子
@@ -3343,6 +3661,46 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
         if (res === 'illegal') this.flashInvalid(sq);
         // 'ok' / 'promotion' 由 App 侧完成清理
       }
+    }
+
+    /* ----- 编辑模式按下：调色板放置 / 拖动棋子 ----- */
+    _editDown(e) {
+      const sq = this.squareFromPoint(e.clientX, e.clientY);
+      if (!sq) return;
+      const pick = this.hooks.editPick();            // 'wQ' 等棋子代码 | 'erase' | null
+      if (pick && pick !== 'erase') { this.hooks.onEditPlace(pick, sq); return; }
+      if (pick === 'erase') { this.hooks.onEditErase(sq); return; }
+      const piece = this.hooks.pieceAt(sq);
+      if (piece) {
+        const el = this.pieces.get(sq);
+        const wasSelected = this.selected === sq;
+        this.select(sq);                              // targets 在编辑模式下为空 → 仅高亮
+        this.drag = this._startDrag(el, sq, e, { wasSelected, edit: true });
+        e.preventDefault();
+      } else if (this.selected) {
+        // 点击-点击移动：把选中的棋子移到此格
+        const from = this.selected;
+        this.clearSelection();
+        this.hooks.onEditMove(from, sq);
+      }
+    }
+
+    /** 开始一次拖拽：记录抓取点相对棋子中心的偏移，拖动时棋子不发生瞬移 */
+    _startDrag(el, sq, e, { wasSelected = false, edit = false } = {}) {
+      const pr = el.getBoundingClientRect();
+      const d = {
+        from: sq, el,
+        x0: e.clientX, y0: e.clientY,
+        moved: false,
+        wasSelected,
+        id: e.pointerId, hoverSq: null,
+        edit,
+        grabDX: e.clientX - (pr.left + pr.width / 2),
+        grabDY: e.clientY - (pr.top + pr.height / 2),
+      };
+      try { el.setPointerCapture(e.pointerId); } catch { /* 忽略 */ }
+      el.classList.add('grabbing');
+      return d;
     }
 
     _move(e) {
@@ -3355,14 +3713,17 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       }
       const rect = this.root.getBoundingClientRect();
       const cell = rect.width / 8;
-      d.el.style.transform = `translate(${e.clientX - rect.left - cell / 2}px, ${e.clientY - rect.top - cell / 2}px)`;
+      // 保持抓取点贴住指针（含初始偏移），棋子从原位平滑跟手、无瞬移
+      const px = e.clientX - rect.left - cell / 2 - d.grabDX;
+      const py = e.clientY - rect.top - cell / 2 - d.grabDY;
+      d.el.style.transform = `translate(${px}px, ${py}px)`;
 
-      // 悬停格反馈：合法 = 加亮，非法 = 红色禁止
+      // 悬停格反馈：合法 = 加亮，非法 = 红色禁止（编辑模式下任意格均可放）
       if (d.hoverSq) this.squares.get(d.hoverSq)?.classList.remove('drag-over', 'drag-bad');
       const sq = this.squareFromPoint(e.clientX, e.clientY);
       d.hoverSq = sq;
       if (sq) {
-        const legal = this.targets.some((mv) => mv.to === sq);
+        const legal = d.edit || this.targets.some((mv) => mv.to === sq);
         this.squares.get(sq)?.classList.add(legal ? 'drag-over' : 'drag-bad');
       }
       e.preventDefault();
@@ -3378,7 +3739,8 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
         if (d.wasSelected) this.clearSelection();
         return;
       }
-      this._finishDrag(d, this.squareFromPoint(e.clientX, e.clientY));
+      if (d.edit) this._finishEditDrag(d, this.squareFromPoint(e.clientX, e.clientY));
+      else this._finishDrag(d, this.squareFromPoint(e.clientX, e.clientY));
     }
 
     _cancel(e) {
@@ -3386,7 +3748,8 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       if (!d || (e.pointerId !== undefined && e.pointerId !== d.id)) return;
       this.drag = null;
       d.el.classList.remove('grabbing');
-      this._finishDrag(d, null);
+      if (d.edit) this._finishEditDrag(d, null);      // 取消 = 拖出棋盘 = 删除
+      else this._finishDrag(d, null);
     }
 
     _finishDrag(d, targetSq) {
@@ -3406,15 +3769,42 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
         this.hooks.onIllegal();
       }
     }
+
+    /* ----- 编辑模式拖拽结束：移动 / 拖出棋盘删除 ----- */
+    _finishEditDrag(d, targetSq) {
+      if (d.hoverSq) this.squares.get(d.hoverSq)?.classList.remove('drag-over', 'drag-bad');
+      d.el.classList.remove('dragging');
+      this.clearSelection();
+      if (!targetSq) { this.hooks.onEditErase(d.from); return; }
+      if (targetSq === d.from) {
+        d.el.style.transform = '';
+        this.placePieceEl(d.el, d.from);
+        return;
+      }
+      this.hooks.onEditMove(d.from, targetSq);
+    }
   }
 
-  /* ---------- MoveList：走子记录 ---------- */
+  /* ---------- MoveList：走子记录（点击任意一步回看该局面） ---------- */
   class MoveList {
-    constructor(el, chipEl) { this.el = el; this.chipEl = chipEl; }
+    constructor(el, chipEl, onPly) {
+      this.el = el;
+      this.chipEl = chipEl;
+      this.onPly = onPly;
+      this.el.addEventListener('click', (e) => {
+        const t = e.target.closest('.ply[data-ply]');
+        if (t && this.onPly) this.onPly(Number(t.dataset.ply));
+      });
+    }
 
-    render(history) {
+    /**
+     * @param history     完整走子序列（verbose）
+     * @param currentPly  当前查看的位置（已走步数；小于总步数 = 回看中）
+     */
+    render(history, currentPly) {
       const n = history.length;
-      this.chipEl.textContent = `${n} 步`;
+      const cur = Math.max(0, Math.min(currentPly ?? n, n));
+      this.chipEl.textContent = cur < n ? `回看 ${cur}/${n}` : `${n} 步`;
       if (!n) {
         this.el.innerHTML = '<div class="moves-empty">尚无走子 · 白方先行</div>';
         return;
@@ -3424,13 +3814,30 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
         const w = history[i], b = history[i + 1];
         rows.push(
           `<div class="mrow"><span class="mno">${i / 2 + 1}.</span>` +
-          `<span class="ply${i === n - 1 ? ' current' : ''}">${w.san}</span>` +
-          (b ? `<span class="ply${i + 1 === n - 1 ? ' current' : ''}">${b.san}</span>` : '<span class="ply"></span>') +
+          this._ply(w, i + 1, cur) +
+          (b ? this._ply(b, i + 2, cur) : '<span class="ply"></span>') +
           `</div>`
         );
       }
       this.el.innerHTML = rows.join('');
-      this.el.scrollTop = this.el.scrollHeight;
+      // 只滚动列表容器自身，绝不带动页面滚动
+      //（scrollIntoView 会连文档一起滚：移动端走子记录位于折叠线下方，
+      //  每走一步都会把整页拽下去，表现为“走棋后界面往上跳一下”）
+      this._scrollSelf();
+    }
+
+    _scrollSelf() {
+      const curEl = this.el.querySelector('.ply.current');
+      if (!curEl) { this.el.scrollTop = this.el.scrollHeight; return; }
+      const cr = this.el.getBoundingClientRect();
+      const er = curEl.getBoundingClientRect();
+      if (er.top < cr.top) this.el.scrollTop += er.top - cr.top;
+      else if (er.bottom > cr.bottom) this.el.scrollTop += er.bottom - cr.bottom;
+    }
+
+    _ply(m, idx, cur) {
+      const cls = `ply${idx === cur ? ' current' : ''}${idx > cur ? ' future' : ''}`;
+      return `<span class="${cls}" data-ply="${idx}" title="点击回看此局面">${m.san}</span>`;
     }
   }
 
@@ -3438,20 +3845,19 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
   class StatusPanel {
     constructor(els) { Object.assign(this, els); }
 
-    update(game, st, history) {
+    /** info: { turn, st, plies, last } —— 均对应“当前查看的位置” */
+    update({ turn, st, plies, last }) {
       if (st.over) {
         this.turnEl.innerHTML = st.code === 'checkmate'
           ? `${PIECE_SVG[st.winner + 'K']} <span>${colorName(st.winner)}胜</span>`
           : '<span>对局结束</span>';
       } else {
-        const turn = game.turn();
         this.turnEl.innerHTML = `${PIECE_SVG[turn + 'K']} <span>${colorName(turn)}</span>`;
       }
       this.stateEl.textContent = st.text;
       this.stateEl.className = 'stat-value st-' + (st.over ? 'over' : st.code);
-      this.pliesEl.textContent = String(history.length);
-      const last = history[history.length - 1];
-      this.lastEl.textContent = last ? last.san : '—';
+      this.pliesEl.textContent = plies;
+      this.lastEl.textContent = last || '—';
     }
   }
 
@@ -3487,7 +3893,9 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
         else if (st.over) badge = st.code === 'checkmate' ? (won ? '胜' : '负') : '和';
         else badge = active ? '行棋中' : '等待';
 
-        const name = isAI ? `AI · ${ctx.levelName || 'Stockfish'}` : colorName(color);
+        const name = isAI
+          ? `AI · ${ctx.levelName || 'Stockfish'}`
+          : (ctx.playerNames && ctx.playerNames[color]) || colorName(color);
         el.innerHTML =
           `<div class="avatar">${PIECE_SVG[color + 'K']}</div>` +
           `<div class="pinfo"><div class="pname">${name}${won ? ' · 获胜' : ''}</div>` +
@@ -3663,11 +4071,27 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       this.st = this.game.status();
       this.promotionPending = false;
 
+      // 回看 / 分叉状态
+      this.viewPly = null;         // null = 实时局面；数字 = 回看到第几步之后
+      this.deviatePly = null;      // 回看中发起的走子：待截断的步数
+      this.importedPgn = null;     // 导入的原始 PGN（导出时可原样取回）
+      this.playerNames = { w: '', b: '' };
+      this.pos = this.game.chess;        // 当前查看位置（回看时为历史局面）
+      this.viewCtx = { st: this.st, turn: 'w', browsing: false };
+      this._pgnView = 'new';             // 导出弹窗当前显示：'new' | 'orig'
+
+      // 局面编辑器状态
+      this.editing = false;
+      this.editor = { map: {}, turn: 'w', pick: null };
+
+      // 沉浸模式
+      this.immersive = false;
+
       // 人机对战状态
       this.mode = 'pvp';            // 'pvp' | 'ai'
       this.humanColor = 'w';
       this.aiLevel = 1;
-      this.settings = { mode: 'pvp', humanColor: 'w', aiLevel: 1, orientation: 'w' };
+      this.settings = { mode: 'ai', humanColor: 'w', aiLevel: 1, orientation: 'w' };   // 默认：执白对 AI（休闲）
       this.engine = null;           // Engine 懒加载
       this.aiThinking = false;
       this.aiBooting = false;
@@ -3677,19 +4101,24 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
 
       this.view = new BoardView($('#board'), {
         interactive: () =>
-          !this.st.over &&
+          !this.viewCtx.st.over &&
           !this.promotionPending &&
           !this.aiThinking &&
           !this.aiBooting &&
-          (this.mode !== 'ai' || this.game.turn() === this.humanColor),
-        pieceAt: (sq) => this.game.pieceAt(sq),
-        turnColor: () => this.game.turn(),
-        targetsFor: (sq) => this.game.legalMoves(sq),
+          (this.mode !== 'ai' || this.viewCtx.turn === this.humanColor),
+        pieceAt: (sq) => (this.editing ? this.editor.map[sq] || null : this.pos ? this.pos.get(sq) || null : null),
+        turnColor: () => (this.editing ? this.editor.turn : this.pos ? this.pos.turn() : 'w'),
+        targetsFor: (sq) =>
+          this.editing || !this.pos || !isSquare(sq) ? [] : this.pos.moves({ square: sq, verbose: true }),
         requestMove: (from, to) => this.requestMove(from, to),
         onIllegal: () => toast('不合法的走法'),
+        editPick: () => (this.editing ? this.editor.pick : null),
+        onEditPlace: (code, sq) => this.editPlace(code, sq),
+        onEditErase: (sq) => this.editErase(sq),
+        onEditMove: (from, to) => this.editMove(from, to),
       });
 
-      this.movelist = new MoveList($('#moves'), $('#movesChip'));
+      this.movelist = new MoveList($('#moves'), $('#movesChip'), (ply) => this.gotoPly(ply));
       this.panel = new StatusPanel({
         turnEl: $('#statTurn'), stateEl: $('#statState'),
         pliesEl: $('#statPlies'), lastEl: $('#statLast'),
@@ -3710,7 +4139,7 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       $('#logo').innerHTML = PIECE_SVG.bN;
       this._bindControls();
 
-      this.newGame({ mode: 'pvp', orientation: 'w' });
+      this.newGame({ mode: 'ai', humanColor: 'w', orientation: 'w' });   // 默认开一局执白对 AI
 
       // 控制台 API（也为自动化测试 / 后续 AI 扩展预留）
       window.chessApp = {
@@ -3725,6 +4154,11 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
           history: () => this.game.history().map((m) => m.san),
           loadFen: (fen) => this.loadFen(fen),
           orientation: () => this.view.orientation,
+          gotoPly: (ply) => this.gotoPly(ply),
+          viewPly: () => this.viewPly,
+          importPgn: (text) => this.loadPgnGame(text),
+          importedPgn: () => this.importedPgn,
+          editor: () => ({ editing: this.editing, fen: this.editing ? this.editorFen() : null }),
         },
         ai: {
           info: () => ({
@@ -3744,13 +4178,22 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       };
     }
 
-    /* ----- 走子流程 ----- */
+    /* ----- 走子流程（回看中走出新着 = 从该局面分叉，截断后续走法） ----- */
+    _legalAt(pos, from, to) {
+      if (!pos || !isSquare(from) || !isSquare(to)) return [];
+      return pos.moves({ square: from, verbose: true }).filter((m) => m.to === to);
+    }
+
     requestMove(from, to) {
-      if (this.st.over || !this.game.isLegal(from, to)) return 'illegal';
+      const pos = this.pos;
+      if (!pos || this.viewCtx.st.over) return 'illegal';
+      const cand = this._legalAt(pos, from, to);
+      if (!cand.length) return 'illegal';
       this.view.clearSelection();
-      if (this.game.isPromotion(from, to)) {
+      if (this.viewPly !== null) this.deviatePly = this.viewPly;   // 回看分叉，待执行时截断
+      if (cand.some((m) => m.flags.includes('p'))) {
         this.promotionPending = true;
-        this.promotion.open({ from, to, color: this.game.turn() });
+        this.promotion.open({ from, to, color: pos.turn() });
         return 'promotion';
       }
       this.executeMove(from, to);
@@ -3758,6 +4201,14 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
     }
 
     executeMove(from, to, promotion) {
+      if (this.deviatePly !== null) {
+        // 回看分叉生效：截断原走法序列，新走法成为主线
+        this.game.truncateTo(this.deviatePly);
+        this.deviatePly = null;
+        this.viewPly = null;
+        this.epoch++;
+        if (this.aiThinking) { this.engine?.cancel(); this.aiThinking = false; }
+      }
       const m = this.game.move({ from, to, promotion });
       if (!m) { this.view.flashInvalid(to); toast('不合法的走法'); return null; }
       this.view.applyMove(m);
@@ -3766,12 +4217,13 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
     }
 
     apiMove(from, to, promotion) {
-      if (!this.game.isLegal(from, to)) return null;
-      if (this.game.isPromotion(from, to)) {
-        const m = this.executeMove(from, to, promotion || 'q');
-        return m ? m.san : null;
-      }
-      const m = this.executeMove(from, to);
+      const pos = this.pos;
+      if (!pos || this.viewCtx.st.over) return null;
+      const cand = this._legalAt(pos, from, to);
+      if (!cand.length) return null;
+      if (this.viewPly !== null) this.deviatePly = this.viewPly;
+      const promo = promotion || (cand.some((m) => m.flags.includes('p')) ? 'q' : undefined);
+      const m = this.executeMove(from, to, promo);
       return m ? m.san : null;
     }
 
@@ -3780,41 +4232,102 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       this.promotion.el.hidden = true;
       this.promotionPending = false;
     }
-    cancelPromotion() { this.closePromotion(); }
+    cancelPromotion() { this.closePromotion(); this.deviatePly = null; }
 
-    /* ----- 统一刷新（所有 UI 状态由引擎状态推导） ----- */
+    /* ----- 统一刷新（所有 UI 状态由引擎状态推导；回看时展示历史局面） ----- */
     refresh(afterMove) {
+      if (this.editing) {                                   // 编辑模式：渲染编辑局面即可
+        this.view.setLastMove(null);
+        this.view.setCheck(null);
+        this.view.renderAll(this.editorFen());
+        this.panel.update({
+          turn: this.editor.turn,
+          st: { over: false, code: 'normal', text: '编辑中' },
+          plies: '—', last: '—',
+        });
+        $('#statMode').textContent = '编辑模式 · 自由摆放棋子';
+        $('#btnLatest').hidden = true;
+        $('#btnUndo').disabled = true;
+        return;
+      }
       this.st = this.game.status();
       const history = this.game.history();
-      const last = history[history.length - 1];
+      const n = history.length;
 
-      this.view.setLastMove(last ? { from: last.from, to: last.to } : null);
-      const checkSq = (this.st.code === 'check' || this.st.code === 'checkmate')
-        ? this.view.findKing(this.game.turn())
+      // 回看状态归一化（截断/悔棋后步数可能变少）
+      if (this.viewPly !== null && this.viewPly >= n) this.viewPly = null;
+      const browsing = this.viewPly !== null;
+
+      // 计算当前查看位置（实时或历史）
+      let pos, vSt, vTurn, vHist, lastMv;
+      if (browsing) {
+        pos = this.game.boardAt(this.viewPly);
+        vHist = history.slice(0, this.viewPly);
+        vSt = computeStatus(pos);
+        vTurn = pos.turn();
+        lastMv = vHist[vHist.length - 1] || null;
+        this.view.renderAll(pos.fen());
+        this.view.clearSelection();
+      } else {
+        pos = this.game.chess;
+        vHist = history;
+        vSt = this.st;
+        vTurn = pos.turn();
+        lastMv = history[n - 1] || null;
+      }
+      this.pos = pos;
+      this.viewCtx = { st: vSt, turn: vTurn, browsing };
+
+      this.view.setLastMove(lastMv ? { from: lastMv.from, to: lastMv.to } : null);
+      const checkSq = (vSt.code === 'check' || vSt.code === 'checkmate')
+        ? this.view.findKing(vTurn)
         : null;
       this.view.setCheck(checkSq);
 
-      this.movelist.render(history);
-      this.panel.update(this.game, this.st, history);
-      this.cards.update(this.game, this.st, history, this.view.orientation, {
+      this.movelist.render(history, browsing ? this.viewPly : n);
+      this.panel.update({
+        turn: vTurn, st: vSt,
+        plies: browsing ? `${this.viewPly}/${n}` : String(n),
+        last: lastMv ? lastMv.san : '—',
+      });
+      this.cards.update({ turn: () => vTurn }, vSt, vHist, this.view.orientation, {
         mode: this.mode,
         humanColor: this.humanColor,
         levelName: AI_LEVELS[this.aiLevel].name,
         thinking: this.aiThinking,
         booting: this.aiBooting,
+        playerNames: this.importedPgn ? this.playerNames : null,
       });
 
-      $('#statMode').textContent = this.mode === 'ai'
-        ? `人机 · 你执${this.humanColor === 'w' ? '白' : '黑'} · ${AI_LEVELS[this.aiLevel].name}`
-        : '双人对战';
-      $('#fenText').textContent = this.game.fen();
-      $('#btnUndo').disabled = history.length === 0;
+      $('#btnLatest').hidden = !browsing;
+      $('#statMode').textContent = this.importedPgn
+        ? '导入棋谱 · 点击走子可回看'
+        : this.mode === 'ai'
+          ? `人机 · 你执${this.humanColor === 'w' ? '白' : '黑'} · ${AI_LEVELS[this.aiLevel].name}`
+          : '双人对战';
+      $('#fenText').textContent = pos.fen();
+      $('#btnUndo').disabled = n === 0;
 
-      if (!this.st.over) this.banner.hide();
-      else if (afterMove) setTimeout(() => { if (this.st.over) this.banner.show(this.st); }, 420);
+      if (browsing) this.banner.hide();
+      else if (!this.st.over) this.banner.hide();
+      else if (afterMove) setTimeout(() => {
+        if (this.st.over && this.viewPly === null) this.banner.show(this.st);
+      }, 420);
+      else this.banner.show(this.st);
 
-      this.analysis.setPosition(this.game.fen(), this.st);
+      this.analysis.setPosition(pos.fen(), vSt);
       this.scheduleAI();
+    }
+
+    /* ----- 走子记录回看 ----- */
+    gotoPly(ply) {
+      if (this.editing) return;
+      if (this.promotionPending) this.cancelPromotion();
+      const n = this.game.history().length;
+      const k = Math.max(0, Math.min(ply, n));
+      this.viewPly = k === n ? null : k;
+      this.view.clearSelection();
+      this.refresh();
     }
 
     /* ----- 走法胜率面板渲染 ----- */
@@ -3850,6 +4363,7 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
     aiColor() { return other(this.humanColor); }
 
     scheduleAI() {
+      if (this.editing) return;
       if (this.mode !== 'ai' || this.aiBroken) return;
       if (this.st.over || this.game.turn() === this.humanColor) return;
       if (this.aiThinking || this.aiBooting || this.aiScheduled) return;
@@ -3858,7 +4372,7 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
     }
 
     async runAI() {
-      if (this.mode !== 'ai' || this.st.over || this.game.turn() === this.humanColor) return;
+      if (this.editing || this.mode !== 'ai' || this.st.over || this.game.turn() === this.humanColor) return;
       const epoch = this.epoch;
       const level = AI_LEVELS[this.aiLevel];
       try {
@@ -3890,7 +4404,10 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
 
     /* ----- 控制动作 ----- */
     undo() {
+      if (this.editing) return false;
       if (this.promotionPending) this.closePromotion();
+      this.viewPly = null;                                     // 悔棋作用于实时棋局
+      this.deviatePly = null;
       if (!this.game.history().length) return false;
       if (this.aiThinking) { this.engine?.cancel(); this.aiThinking = false; }
       this.epoch++;                                            // 丢弃在途的 AI 结果
@@ -3919,6 +4436,7 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
      * opts: { mode: 'pvp'|'ai', humanColor, aiLevel, orientation }
      */
     newGame(opts = {}) {
+      if (this.editing) this._exitEditUI();
       if (this.promotionPending) this.closePromotion();
       this.epoch++;
       this.aiThinking = false;
@@ -3939,6 +4457,10 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       this.aiLevel = s.aiLevel;
 
       this.game.reset();
+      this.importedPgn = null;
+      this.playerNames = { w: '', b: '' };
+      this.viewPly = null;
+      this.deviatePly = null;
       this.st = this.game.status();
       if (this.engine?.ready) this.engine.newGame();
       this.view.clearSelection();
@@ -3948,9 +4470,14 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
     }
 
     loadFen(fen) {
+      if (this.editing) this._exitEditUI();
       if (this.promotionPending) this.closePromotion();
       if (this.aiThinking) { this.engine?.cancel(); this.aiThinking = false; }
       this.epoch++;
+      this.viewPly = null;
+      this.deviatePly = null;
+      this.importedPgn = null;
+      this.playerNames = { w: '', b: '' };
       if (!this.game.loadFen(fen)) { toast('无效的 FEN'); this.refresh(); return false; }
       this.st = this.game.status();
       this.view.clearSelection();
@@ -3959,8 +4486,16 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       return true;
     }
 
-    /* ----- PGN ----- */
+    /* ----- PGN：导入 / 导出 ----- */
+    /** 导出当前棋局的 PGN；导入棋谱分叉时保留原头信息，仅 Result 跟随最新局面 */
     buildPgn() {
+      if (this.importedPgn) {
+        this.game.setHeader('Result', this.st.result);
+        let out = this.game.pgnBody().trim();          // 原始头信息 + 当前走法序列
+        out = out.replace(/\s*(\*|1-0|0-1|1\/2-1\/2)\s*$/, '').trim();
+        if (out && !out.endsWith(']')) out += ` ${this.st.result}`;
+        return out ? out + '\n' : '';
+      }
       const d = new Date();
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
@@ -3976,18 +4511,267 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
         `[White "${wName}"]`,
         `[Black "${bName}"]`,
         `[Result "${this.st.result}"]`,
-      ].join('\n');
+      ];
+      // 自定义开局（编辑器 / 导入 FEN）：保留 SetUp/FEN 头，否则导出的棋谱无法还原
+      const setFen = this.game.header('FEN');
+      if (this.game.header('SetUp') === '1' && setFen) {
+        headers.push('[SetUp "1"]', `[FEN "${setFen}"]`);
+      }
+      const headerText = headers.join('\n');
       let body = this.game.pgnBody().trim();
       body = body.replace(/^\[.*\]\s*$/gm, '').trim();   // 防御性去掉库内可能存在的头
       body = body.replace(/\s*\*\s*$/, '').trim();       // 去掉结尾的 *
-      if (!body) return `${headers}\n`;
-      return `${headers}\n\n${body} ${this.st.result}\n`;
+      if (!body) return `${headerText}\n`;
+      return `${headerText}\n\n${body} ${this.st.result}\n`;
     }
 
     openPgn() {
+      if (this.editing) { toast('请先完成或取消局面编辑'); return; }
       if (this.promotionPending) this.closePromotion();
-      $('#pgnText').value = this.buildPgn();
+      this._pgnView = 'new';
       $('#pgnModal').hidden = false;
+      this._renderPgnModal();
+    }
+
+    _renderPgnModal() {
+      const hasOrig = !!this.importedPgn;
+      $('#pgnTabs').hidden = !hasOrig;
+      $('#pgnTabNew').classList.toggle('active', this._pgnView === 'new');
+      $('#pgnTabOrig').classList.toggle('active', this._pgnView === 'orig');
+      $('#pgnText').value = this._pgnView === 'orig' ? this.importedPgn : this.buildPgn();
+    }
+
+    /* ----- PGN 导入 ----- */
+    openImport() {
+      if (this.promotionPending) this.closePromotion();
+      $('#importError').hidden = true;
+      $('#importModal').hidden = false;
+      setTimeout(() => $('#importText').focus({ preventScroll: true }), 50);
+    }
+
+    doImport() {
+      const text = $('#importText').value.trim();
+      const errEl = $('#importError');
+      if (!text) {
+        errEl.textContent = '请先粘贴 PGN 文本或选择 .pgn 文件';
+        errEl.hidden = false;
+        return;
+      }
+      if (!this.loadPgnGame(text)) {
+        errEl.textContent = '无法解析这份 PGN（未识别到走子序列），请检查内容格式';
+        errEl.hidden = false;
+        return;
+      }
+      $('#importModal').hidden = true;
+      toast('棋谱已导入 · 点击走子记录可回看任意局面');
+    }
+
+    /** 导入 PGN 成棋局（双人模式，可回看、可分叉试走）；原始文本保留用于原样导出 */
+    loadPgnGame(text) {
+      const probe = new Chess();
+      let ok = false;
+      try { ok = probe.load_pgn(text, { sloppy: true }); } catch { ok = false; }
+      if (!ok || probe.history().length === 0) return false;
+
+      if (this.promotionPending) this.closePromotion();
+      if (this.editing) this._exitEditUI();
+      this.epoch++;
+      this.aiThinking = false;
+      this.aiBooting = false;
+      this.aiScheduled = false;
+      this.aiBroken = false;
+      this.engine?.cancel();
+      this.mode = 'pvp';
+      this.settings.mode = 'pvp';
+      this.viewPly = null;
+      this.deviatePly = null;
+      this.importedPgn = text;
+      this.playerNames = {
+        w: (probe.header() && probe.header().White) || '',
+        b: (probe.header() && probe.header().Black) || '',
+      };
+
+      this.game = new Game();
+      this.game.loadPgn(text);
+      this.st = this.game.status();
+      if (this.engine?.ready) this.engine.newGame();
+      this.view.clearSelection();
+      this.view.renderAll(this.game.fen());
+      this.refresh();
+      return true;
+    }
+
+    /* ----- 局面编辑器：自由摆子 / 清空 / 导入 FEN ----- */
+    editorFen() { return fenFromMap(this.editor.map, this.editor.turn); }
+
+    enterEdit() {
+      if (this.promotionPending) this.closePromotion();
+      if (this.aiThinking) { this.engine?.cancel(); this.aiThinking = false; }
+      this.epoch++;
+      this.viewPly = null;
+      this.deviatePly = null;
+      this.editor.map = this.game.mapPieces();     // 默认从当前实时局面开始编辑
+      this.editor.turn = this.game.turn();
+      this.editor.pick = null;
+      this.editing = true;
+      this.view.setEditMode(true);
+      this.view.clearSelection();
+      $('#editorCard').hidden = false;
+      $('#btnEdit').textContent = '退出编辑';
+      this.banner.hide();
+      this.analysis.setPosition(null);             // 暂停局面分析
+      $('#evalMeta').textContent = '编辑模式';
+      $('#evalMoves').innerHTML = '<div class="moves-empty">编辑中…完成编辑后恢复分析</div>';
+      this._renderEditorUI();
+      this.refresh();                              // 走编辑分支：渲染编辑局面 + 状态卡
+    }
+
+    _exitEditUI() {
+      this.editing = false;
+      this.editor.pick = null;
+      this.view.setEditMode(false);
+      this.view.clearSelection();
+      $('#editorCard').hidden = true;
+      $('#btnEdit').textContent = '编辑局面';
+    }
+
+    finishEdit() {
+      const fen = this.editorFen();
+      const err = this._validateEditFen(fen);
+      if (err) { toast(err); return false; }
+      this._exitEditUI();
+      this.loadFen(fen);                            // 作为新棋局开始（保留当前模式）
+      toast('已从编辑局面开始对局');
+      return true;
+    }
+
+    cancelEdit() {
+      this._exitEditUI();
+      this.view.renderAll(this.game.fen());
+      this.refresh();
+    }
+
+    /** 编辑器调色板点击：拾取 / 取消拾取 */
+    pickPiece(code) {
+      this.editor.pick = this.editor.pick === code ? null : code;
+      this._renderEditorUI();
+    }
+
+    setEditTurn(t) {
+      this.editor.turn = t;
+      this._renderEditorUI();
+    }
+
+    editPlace(code, sq) {
+      if (this.editor.map[sq] === code) return;
+      if (this.editor.map[sq]) this.view.removePiece(sq);
+      this.editor.map[sq] = code;
+      this.view.setPiece(sq, code);
+      this._afterEditChange();
+    }
+
+    editErase(sq) {
+      if (!this.editor.map[sq]) return;
+      delete this.editor.map[sq];
+      this.view.removePiece(sq);
+      this._afterEditChange();
+    }
+
+    editMove(from, to) {
+      const code = this.editor.map[from];
+      if (!code || from === to) return;
+      if (this.editor.map[to]) this.view.removePiece(to);
+      delete this.editor.map[from];
+      this.editor.map[to] = code;
+      this.view.movePieceEl(from, to);
+      this._afterEditChange();
+    }
+
+    /** 一键更换编辑基底：清空 / 标准开局 / 回到当前实时局面 */
+    loadEditBase(kind) {
+      if (kind === 'clear') {
+        this.editor.map = {};
+      } else if (kind === 'standard') {
+        this.editor.map = mapFromBoard(new Chess());
+      } else {
+        this.editor.map = this.game.mapPieces();
+        this.editor.turn = this.game.turn();
+      }
+      this.view.clearSelection();
+      this.view.renderAll(this.editorFen());
+      this._afterEditChange();
+    }
+
+    /** 从输入框导入 FEN 到编辑器 */
+    applyEditFen() {
+      const fen = normalizeFen($('#editFen').value);
+      if (!fen) { toast('无效的 FEN（棋盘部分格式不正确）'); return; }
+      const c = new Chess();
+      c.load(fen);
+      this.editor.map = mapFromBoard(c);
+      this.editor.turn = c.turn();
+      this.view.clearSelection();
+      this.view.renderAll(this.editorFen());
+      this._afterEditChange();
+    }
+
+    _validateEditFen(fen) {
+      const map = this.editor.map;
+      const wk = Object.values(map).filter((c) => c === 'wK').length;
+      const bk = Object.values(map).filter((c) => c === 'bK').length;
+      if (wk !== 1) return '编辑未完成：白方需要恰好一个王';
+      if (bk !== 1) return '编辑未完成：黑方需要恰好一个王';
+      for (const sq of Object.keys(map)) {
+        if (map[sq][1] === 'P' && (sq[1] === '1' || sq[1] === '8')) return '编辑未完成：兵不能放在第 1 / 8 横排';
+      }
+      // 轮走方不能已经将军对方王（否则该局面非法）
+      const parts = fen.split(' ');
+      parts[1] = other(this.editor.turn);
+      const probe = new Chess();
+      if (probe.load(parts.join(' ')) && probe.in_check()) return '编辑未完成：当前行棋方已将军对方王，请切换行棋方';
+      return null;
+    }
+
+    _afterEditChange() {
+      const map = this.editor.map;
+      const wk = Object.values(map).filter((c) => c === 'wK').length;
+      const bk = Object.values(map).filter((c) => c === 'bK').length;
+      $('#editKings').textContent = `白王 ${wk} · 黑王 ${bk}`;
+      $('#editKings').classList.toggle('bad', wk !== 1 || bk !== 1);
+      const fenEl = $('#editFen');
+      if (document.activeElement !== fenEl) fenEl.value = this.editorFen();
+    }
+
+    _renderEditorUI() {
+      const pal = $('#editPalette');
+      pal.innerHTML = '';
+      for (const code of ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP', 'bK', 'bQ', 'bR', 'bB', 'bN', 'bP']) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pal' + (this.editor.pick === code ? ' on' : '');
+        btn.dataset.code = code;
+        btn.title = colorName(code[0]) + PIECE_ZH[code[1].toLowerCase()];
+        btn.innerHTML = PIECE_SVG[code];
+        pal.appendChild(btn);
+      }
+      const eraser = document.createElement('button');
+      eraser.type = 'button';
+      eraser.className = 'pal pal-eraser' + (this.editor.pick === 'erase' ? ' on' : '');
+      eraser.dataset.code = 'erase';
+      eraser.title = '删除工具：点击棋盘上的棋子将其移除（也可右键删除 / 拖出棋盘）';
+      eraser.textContent = '✕';
+      pal.appendChild(eraser);
+
+      document.querySelectorAll('[data-seg="edit-turn"] .seg-btn').forEach((b) => {
+        b.classList.toggle('on', b.dataset.value === this.editor.turn);
+      });
+      this._afterEditChange();
+    }
+
+    /* ----- 沉浸模式：隐藏页面其余部分，只留棋盘 ----- */
+    toggleImmersive(on) {
+      this.immersive = !!on;
+      document.body.classList.toggle('immersive', this.immersive);
     }
 
     /* ----- 控件绑定 ----- */
@@ -3997,19 +4781,86 @@ const ENGINE_WASM_B64 = "AGFzbQEAAAABwgM5YAF/AX9gAX8AYAJ/fwBgAn9/AX9gA39/fwF/YAN
       $('#btnRestart').addEventListener('click', () => this.newGame());
       $('#btnNew').addEventListener('click', () => this.newDialog.open());
       $('#btnPgn').addEventListener('click', () => this.openPgn());
+      $('#btnImportPgn').addEventListener('click', () => this.openImport());
+      $('#btnEdit').addEventListener('click', () => (this.editing ? this.cancelEdit() : this.enterEdit()));
+      $('#btnLatest').addEventListener('click', () => this.gotoPly(this.game.history().length));
 
-      $('#btnCopyFen').addEventListener('click', () => copyText(this.game.fen(), 'FEN 已复制'));
+      // 局面编辑器
+      $('#editPalette').addEventListener('click', (e) => {
+        const b = e.target.closest('.pal');
+        if (b) this.pickPiece(b.dataset.code);
+      });
+      document.querySelectorAll('[data-seg="edit-turn"] .seg-btn').forEach((b) => {
+        b.addEventListener('click', () => this.setEditTurn(b.dataset.value));
+      });
+      $('#editClear').addEventListener('click', () => this.loadEditBase('clear'));
+      $('#editStandard').addEventListener('click', () => this.loadEditBase('standard'));
+      $('#editCurrent').addEventListener('click', () => this.loadEditBase('current'));
+      $('#editApplyFen').addEventListener('click', () => this.applyEditFen());
+      $('#editFen').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.applyEditFen(); } });
+      $('#editDone').addEventListener('click', () => this.finishEdit());
+      $('#editCancel').addEventListener('click', () => this.cancelEdit());
+
+      // 沉浸模式（只显示棋盘）
+      $('#btnImmersive').addEventListener('click', () => this.toggleImmersive(true));
+      $('#exitImmersive').addEventListener('click', () => this.toggleImmersive(false));
+
+      // 走法胜率 / 左侧胜率条显示开关（胜率条默认关闭）
+      $('#tglMoves').addEventListener('change', (e) =>
+        document.body.classList.toggle('eval-off', !e.target.checked));
+      $('#tglBar').addEventListener('change', (e) =>
+        document.body.classList.toggle('bar-off', !e.target.checked));
+      document.body.classList.toggle('bar-off', !$('#tglBar').checked);
+      document.body.classList.toggle('eval-off', !$('#tglMoves').checked);
+
+      $('#btnCopyFen').addEventListener('click', () =>
+        copyText(this.editing ? this.editorFen() : this.pos.fen(), 'FEN 已复制'));
 
       $('#pgnCopy').addEventListener('click', () => copyText($('#pgnText').value, 'PGN 已复制'));
-      $('#pgnDownload').addEventListener('click', () => downloadText('chess-game.pgn', $('#pgnText').value));
+      $('#pgnDownload').addEventListener('click', () =>
+        downloadText(this._pgnView === 'orig' ? 'chess-imported.pgn' : 'chess-game.pgn', $('#pgnText').value));
       $('#pgnClose').addEventListener('click', () => { $('#pgnModal').hidden = true; });
       $('#pgnModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) $('#pgnModal').hidden = true; });
+      $('#pgnTabNew').addEventListener('click', () => { this._pgnView = 'new'; this._renderPgnModal(); });
+      $('#pgnTabOrig').addEventListener('click', () => { this._pgnView = 'orig'; this._renderPgnModal(); });
+
+      $('#importConfirm').addEventListener('click', () => this.doImport());
+      $('#importCancel').addEventListener('click', () => { $('#importModal').hidden = true; });
+      $('#importModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) $('#importModal').hidden = true; });
+      $('#importFile').addEventListener('change', (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = () => { $('#importText').value = String(r.result || ''); };
+        r.readAsText(f);
+      });
 
       document.addEventListener('keydown', (e) => {
-        if (e.key !== 'Escape') return;
-        if (this.promotionPending) this.cancelPromotion();
-        this.newDialog.close();
-        $('#pgnModal').hidden = true;
+        if (e.key === 'Escape') {
+          if (this.promotionPending) return this.cancelPromotion();
+          const anyModal = !$('#newModal').hidden || !$('#pgnModal').hidden || !$('#importModal').hidden;
+          if (anyModal) {
+            this.newDialog.close();
+            $('#pgnModal').hidden = true;
+            $('#importModal').hidden = true;
+            return;
+          }
+          if (this.editing) return this.cancelEdit();
+          if (this.immersive) this.toggleImmersive(false);
+          return;
+        }
+        // ←/→/Home/End 回看走子记录
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+        if (e.target.closest && e.target.closest('input, textarea, select')) return;
+        if (!$('#newModal').hidden || !$('#pgnModal').hidden || !$('#importModal').hidden || this.promotionPending) return;
+        const n = this.game.history().length;
+        if (!n) return;
+        const cur = this.viewPly === null ? n : this.viewPly;
+        e.preventDefault();
+        if (e.key === 'ArrowLeft' && cur > 0) this.gotoPly(cur - 1);
+        else if (e.key === 'ArrowRight' && cur < n) this.gotoPly(cur + 1);
+        else if (e.key === 'Home') this.gotoPly(0);
+        else if (e.key === 'End') this.gotoPly(n);
       });
     }
   }

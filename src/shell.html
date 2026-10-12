@@ -17,7 +17,7 @@
   <div class="logo" id="logo" aria-hidden="true"></div>
   <div class="hero-text">
     <h1>Online Chess</h1>
-    <p>双人对战 · 完整规则 · 打开即玩 · 离线可用</p>
+    <p>执白对 AI · 双人对战 · 完整规则 · 离线可用</p>
   </div>
 </header>
 
@@ -51,14 +51,62 @@
 
   <!-- 右列：状态 / 走子记录 / 控制 -->
   <aside class="panel" aria-label="对局信息">
-    <div class="card status-card">
-      <h2>对局状态</h2>
-      <div class="stats">
-        <div class="stat"><span class="stat-label">当前回合</span><span class="stat-value" id="statTurn">—</span></div>
-        <div class="stat"><span class="stat-label">游戏状态</span><span class="stat-value" id="statState">—</span></div>
-        <div class="stat"><span class="stat-label">已走步数</span><span class="stat-value" id="statPlies">0</span></div>
-        <div class="stat"><span class="stat-label">最近一步</span><span class="stat-value" id="statLast">—</span></div>
-        <div class="stat wide"><span class="stat-label">对局模式</span><span class="stat-value" id="statMode">双人对战</span></div>
+    <button class="btn primary btn-new-top" id="btnNew" title="选择模式 / 难度，开一局新游戏">＋ 新游戏</button>
+
+    <div class="row-2col">
+      <div class="card status-card">
+        <h2>对局状态</h2>
+        <div class="stats">
+          <div class="stat"><span class="stat-label">当前回合</span><span class="stat-value" id="statTurn">—</span></div>
+          <div class="stat"><span class="stat-label">游戏状态</span><span class="stat-value" id="statState">—</span></div>
+          <div class="stat"><span class="stat-label">已走步数</span><span class="stat-value" id="statPlies">0</span></div>
+          <div class="stat"><span class="stat-label">最近一步</span><span class="stat-value" id="statLast">—</span></div>
+          <div class="stat wide"><span class="stat-label">对局模式</span><span class="stat-value" id="statMode">双人对战</span></div>
+        </div>
+      </div>
+
+      <div class="card controls-card">
+        <h2>游戏控制</h2>
+        <div class="btn-grid">
+          <button class="btn" id="btnUndo" title="撤销最近一步">悔棋</button>
+          <button class="btn" id="btnFlip" title="交换黑白视角">翻转棋盘</button>
+          <button class="btn" id="btnRestart" title="回到初始局面">重新开始</button>
+          <button class="btn" id="btnPgn" title="导出本局棋谱">导出 PGN</button>
+          <button class="btn" id="btnImportPgn" title="导入 PGN 棋谱，回看并试走新变化">导入 PGN</button>
+          <button class="btn" id="btnEdit" title="编辑局面：自由摆放棋子 / 清空棋盘 / 导入 FEN">编辑局面</button>
+          <button class="btn" id="btnImmersive" title="只显示棋盘的专注模式（Esc 退出）">沉浸模式</button>
+        </div>
+        <details class="advanced">
+          <summary>局面 FEN</summary>
+          <code id="fenText"></code>
+          <button class="btn tiny" id="btnCopyFen" type="button">复制 FEN</button>
+        </details>
+      </div>
+    </div>
+
+    <div class="card editor-card" id="editorCard" hidden>
+      <div class="card-head">
+        <h2>编辑局面</h2>
+        <span class="chip" id="editKings">—</span>
+      </div>
+      <p class="edit-hint">左侧棋子栏点击拾取 → 点击棋盘放置；拖拽移动；右键 / 拖出棋盘 / ✕ 工具删除</p>
+      <div class="edit-palette" id="editPalette"></div>
+      <div class="edit-row">
+        <div class="seg" data-seg="edit-turn">
+          <button class="seg-btn" data-value="w" type="button">白先</button>
+          <button class="seg-btn" data-value="b" type="button">黑先</button>
+        </div>
+        <button class="btn tiny" id="editClear" type="button" title="移除所有棋子">清空棋盘</button>
+        <button class="btn tiny" id="editStandard" type="button" title="恢复标准开局摆放">标准开局</button>
+        <button class="btn tiny" id="editCurrent" type="button" title="回到进入编辑前的局面">当前局面</button>
+      </div>
+      <div class="edit-row edit-fen-row">
+        <input id="editFen" spellcheck="false" placeholder="粘贴 FEN 导入…">
+        <button class="btn tiny" id="editApplyFen" type="button">应用</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="editDone" type="button">完成编辑</button>
+        <button class="btn ghost" id="editCancel" type="button">取消编辑</button>
       </div>
     </div>
 
@@ -66,6 +114,14 @@
       <div class="card-head">
         <h2>走法胜率</h2>
         <span class="chip" id="evalMeta">待分析</span>
+      </div>
+      <div class="eval-toggles">
+        <label class="switch" title="显示 / 隐藏右侧走法胜率列表">
+          <input type="checkbox" id="tglMoves" checked><span class="sl"></span>走法列表
+        </label>
+        <label class="switch" title="显示 / 隐藏棋盘左侧胜率条">
+          <input type="checkbox" id="tglBar"><span class="sl"></span>左侧胜率条
+        </label>
       </div>
       <div class="eval-legend"><span class="lg lg-w">白胜</span><span class="lg lg-d">和棋</span><span class="lg lg-b">黑胜</span></div>
       <div class="eval-moves" id="evalMoves"><div class="moves-empty">分析引擎启动中…</div></div>
@@ -75,24 +131,9 @@
       <div class="card-head">
         <h2>走子记录</h2>
         <span class="chip" id="movesChip">0 步</span>
+        <button class="chip chip-btn" id="btnLatest" hidden title="回到最新局面">▸ 回到当前</button>
       </div>
       <div class="moves" id="moves" aria-live="polite"></div>
-    </div>
-
-    <div class="card controls-card">
-      <h2>游戏控制</h2>
-      <div class="btn-grid">
-        <button class="btn" id="btnUndo" title="撤销最近一步">悔棋</button>
-        <button class="btn" id="btnFlip" title="交换黑白视角">翻转棋盘</button>
-        <button class="btn" id="btnRestart" title="回到初始局面">重新开始</button>
-        <button class="btn" id="btnPgn" title="导出本局棋谱">导出 PGN</button>
-        <button class="btn primary" id="btnNew">新游戏</button>
-      </div>
-      <details class="advanced">
-        <summary>局面 FEN</summary>
-        <code id="fenText"></code>
-        <button class="btn tiny" id="btnCopyFen" type="button">复制 FEN</button>
-      </details>
     </div>
   </aside>
 </main>
@@ -151,7 +192,11 @@
 <div class="modal-backdrop" id="pgnModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-label="导出 PGN">
     <h3>导出 PGN</h3>
-    <p class="muted">可复制或下载本局棋谱，用于复盘与分享</p>
+    <p class="muted">可复制或下载棋谱，用于复盘与分享</p>
+    <div class="pgn-tabs" id="pgnTabs" hidden>
+      <button class="pgn-tab active" id="pgnTabNew" type="button">本局（含新走法）</button>
+      <button class="pgn-tab" id="pgnTabOrig" type="button">原导入棋谱</button>
+    </div>
     <textarea id="pgnText" readonly spellcheck="false"></textarea>
     <div class="btn-row">
       <button class="btn" id="pgnCopy">复制</button>
@@ -161,7 +206,26 @@
   </div>
 </div>
 
+<!-- PGN 导入 -->
+<div class="modal-backdrop" id="importModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="导入 PGN">
+    <h3>导入 PGN 棋谱</h3>
+    <p class="muted">粘贴 PGN 文本或选择 .pgn 文件。导入后可点击走子记录回看任意局面，也可在任意位置走出新变化；原始棋谱保持不变，可随时原样导出。</p>
+    <input type="file" id="importFile" accept=".pgn,text/plain">
+    <textarea id="importText" spellcheck="false" rows="9"
+      placeholder='[Event "休闲对局"]&#10;[White "白方"]&#10;[Black "黑方"]&#10;&#10;1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 ...'></textarea>
+    <div class="import-error" id="importError" hidden></div>
+    <div class="btn-row">
+      <button class="btn primary" id="importConfirm">导入</button>
+      <button class="btn ghost" id="importCancel">取消</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status"></div>
+
+<!-- 沉浸模式退出按钮 -->
+<button class="btn ghost exit-immersive" id="exitImmersive" type="button" title="退出沉浸模式（Esc）">✕ 退出沉浸</button>
 
 <script>
 /*__CHESS_JS__*/
